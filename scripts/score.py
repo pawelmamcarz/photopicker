@@ -294,7 +294,10 @@ def main():
     # Wczytaj listę zdjęć
     source_total = None
     if args.from_file:
-        with open(args.from_file) as f:
+        from_path = Path(args.from_file)
+        if not from_path.is_absolute() and not from_path.exists():
+            from_path = dir_path / from_path
+        with open(from_path) as f:
             manifest = json.load(f)
         candidates = manifest.get("candidates", [])
         image_paths = [Path(c["path"]) for c in candidates]
