@@ -222,7 +222,8 @@ def score_batch(paths, clip_model, processor, aesthetic_model, pos_text_emb, neg
     pixel_values = inputs["pixel_values"].to(device)
 
     # CLIP image embeddings
-    img_emb = clip_model.get_image_features(pixel_values=pixel_values)
+    img_out = clip_model.vision_model(pixel_values=pixel_values)
+    img_emb = clip_model.visual_projection(img_out.pooler_output)
     img_emb = img_emb / img_emb.norm(dim=-1, keepdim=True)
 
     # CLIP score (cosine sim z positive - negative)
@@ -337,7 +338,8 @@ def main():
     # Zakoduj tekst raz
     text_inputs = processor(text=[pos_prompt, neg_prompt], return_tensors="pt", padding=True).to(device)
     with torch.no_grad():
-        text_emb = clip_model.get_text_features(**text_inputs)
+        text_out = clip_model.text_model(**text_inputs)
+        text_emb = clip_model.text_projection(text_out.pooler_output)
         text_emb = text_emb / text_emb.norm(dim=-1, keepdim=True)
     pos_text_emb = text_emb[0:1]
     neg_text_emb = text_emb[1:2]
