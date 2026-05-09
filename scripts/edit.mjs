@@ -31,6 +31,14 @@ const PHOTOGRAPHERS = [
   { id: 'arbus',           name: 'Diane Arbus' },
   { id: 'newton',          name: 'Helmut Newton' },
   { id: 'mccurry',         name: 'Steve McCurry' },
+  { id: 'capa',            name: 'Robert Capa' },
+  { id: 'mccullin',        name: 'Don McCullin' },
+  { id: 'salgado',         name: 'Sebastião Salgado' },
+  { id: 'eggleston',       name: 'William Eggleston' },
+  { id: 'parr',            name: 'Martin Parr' },
+  { id: 'goldin',          name: 'Nan Goldin' },
+  { id: 'leibovitz',       name: 'Annie Leibovitz' },
+  { id: 'maier',           name: 'Vivian Maier' },
 ];
 
 const EDITING_NOTES = {
@@ -40,6 +48,14 @@ const EDITING_NOTES = {
   'arbus':           'Desaturacja 60%, kontrast +30%',
   'newton':          'Kontrast +40%, jasność -5%, nasycenie -20%',
   'mccurry':         'Nasycenie +50%, kontrast +20%, jasność -5%',
+  'capa':            'B&W, kontrast +40%, jasność -15%, ziarno filmowe',
+  'mccullin':        'B&W, kontrast +50%, jasność -20%, głębokie cienie',
+  'salgado':         'B&W, kontrast +60%, jasność -20%, epicka winieta',
+  'eggleston':       'Nasycenie +60%, kontrast +15%, kodakowy kolor',
+  'parr':            'Nasycenie +80%, kontrast +30%, flat flash look',
+  'goldin':          'Nasycenie +30%, ciepłe tony, miękki kontrast',
+  'leibovitz':       'Kinematograficzny, kontrast +35%, lekka desaturacja',
+  'maier':           'B&W, kontrast +25%, winieta, kadr 1:1',
 };
 
 function applyPhotographerStyle(pipeline, photographerId) {
@@ -81,6 +97,58 @@ function applyPhotographerStyle(pipeline, photographerId) {
       return pipeline
         .modulate({ brightness: 0.95, saturation: 1.5 })
         .linear(1.2, Math.round(127.5 * (1 - 1.2)));
+
+    case 'capa':
+      // grayscale(100%) contrast(1.4) brightness(0.85) + szum
+      return pipeline
+        .grayscale()
+        .modulate({ brightness: 0.85 })
+        .linear(1.4, Math.round(127.5 * (1 - 1.4)));
+
+    case 'mccullin':
+      // grayscale(100%) contrast(1.5) brightness(0.8) — głęboki B&W
+      return pipeline
+        .grayscale()
+        .modulate({ brightness: 0.8 })
+        .linear(1.5, Math.round(127.5 * (1 - 1.5)));
+
+    case 'salgado':
+      // grayscale(100%) contrast(1.6) brightness(0.8) — epickie cienie
+      return pipeline
+        .grayscale()
+        .modulate({ brightness: 0.8 })
+        .linear(1.6, Math.round(127.5 * (1 - 1.6)));
+
+    case 'eggleston':
+      // saturate(1.6) contrast(1.15) — mundane America
+      return pipeline
+        .modulate({ saturation: 1.6 })
+        .linear(1.15, Math.round(127.5 * (1 - 1.15)));
+
+    case 'parr':
+      // saturate(1.8) contrast(1.3) brightness(1.05) — hipersaturacja
+      return pipeline
+        .modulate({ brightness: 1.05, saturation: 1.8 })
+        .linear(1.3, Math.round(127.5 * (1 - 1.3)));
+
+    case 'goldin':
+      // saturate(1.3) contrast(1.05) brightness(1.1) — ciepły film
+      return pipeline
+        .modulate({ brightness: 1.1, saturation: 1.3 })
+        .linear(1.05, Math.round(127.5 * (1 - 1.05)));
+
+    case 'leibovitz':
+      // saturate(1.1) contrast(1.35) brightness(0.9) — kinematograficzny
+      return pipeline
+        .modulate({ brightness: 0.9, saturation: 1.1 })
+        .linear(1.35, Math.round(127.5 * (1 - 1.35)));
+
+    case 'maier':
+      // grayscale(100%) contrast(1.25) brightness(0.95) — Rollei B&W
+      return pipeline
+        .grayscale()
+        .modulate({ brightness: 0.95 })
+        .linear(1.25, Math.round(127.5 * (1 - 1.25)));
 
     default:
       return pipeline;
