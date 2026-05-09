@@ -15,7 +15,7 @@
  *   --help
  */
 
-import { readdir, mkdir, copyFile, readFile, writeFile } from 'fs/promises';
+import { readdir, mkdir, copyFile, readFile, writeFile, stat } from 'fs/promises';
 import { join, extname, basename } from 'path';
 import { createInterface } from 'readline';
 import sharp from 'sharp';
@@ -209,12 +209,15 @@ Opcje:
   -p, --photographer <id>   ID fotografa (pomija interaktywny wybór)
   -t, --threshold <liczba>  Minimalny wynik do skopiowania (domyślnie: 75)
   -o, --out <nazwa>         Nazwa folderu wyjściowego (domyślnie: edycja)
+  --scan <plik>             Użyj kandydatów z _scan.json (po: npm run scan)
 
 Fotografowie:
 ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
 
-Krok 2 (obróbka stylistyczna):
-  npm run edit -- <katalog/edycja>
+Workflow z pre-filtrem:
+  npm run scan -- <katalog>
+  npm run pick -- <katalog> --scan <katalog>/_scan.json -p <fotograf>
+  npm run edit -- <katalog>/edycja
 `);
     process.exit(0);
   }
@@ -223,6 +226,7 @@ Krok 2 (obróbka stylistyczna):
   let photographerId = null;
   let threshold = 75;
   let outDirName = 'edycja';
+  let scanFile = null;
 
   for (let i = 1; i < args.length; i++) {
     if ((args[i] === '--photographer' || args[i] === '-p') && args[i + 1]) {
@@ -231,6 +235,8 @@ Krok 2 (obróbka stylistyczna):
       threshold = parseInt(args[++i], 10);
     } else if ((args[i] === '--out' || args[i] === '-o') && args[i + 1]) {
       outDirName = args[++i];
+    } else if (args[i] === '--scan' && args[i + 1]) {
+      scanFile = args[++i];
     }
   }
 
@@ -259,21 +265,33 @@ Krok 2 (obróbka stylistyczna):
 
   const photographer = PHOTOGRAPHERS.find(p => p.id === photographerId);
 
-  let files;
-  try {
-    files = await readdir(dirPath);
-  } catch {
-    console.error(`Nie można odczytać katalogu: ${dirPath}`);
-    process.exit(1);
+  // Wczytaj listę z _scan.json lub skanuj cały katalog
+  let images;
+  if (scanFile) {
+    try {
+      const scan = JSON.parse(await readFile(scanFile, 'utf-8'));
+      images = scan.candidates.map(c => c.path);
+      console.log(`  Kandydaci z pre-filtru: ${images.length} (z ${scan.summary.total} oryginałów, redukcja ${scan.summary.reductionPercent}%)\n`);
+    } catch {
+      console.error(`Nie można wczytać scan file: ${scanFile}`);
+      process.exit(1);
+    }
+  } else {
+    let files;
+    try {
+      files = await readdir(dirPath);
+    } catch {
+      console.error(`Nie można odczytać katalogu: ${dirPath}`);
+      process.exit(1);
+    }
+    images = files
+      .filter(f => VALID_EXTS.has(extname(f).toLowerCase()))
+      .map(f => join(dirPath, f))
+      .sort();
   }
 
-  const images = files
-    .filter(f => VALID_EXTS.has(extname(f).toLowerCase()))
-    .map(f => join(dirPath, f))
-    .sort();
-
   if (images.length === 0) {
-    console.error('Brak zdjęć (JPEG/PNG/WebP) w podanym katalogu.');
+    console.error('Brak zdjęć do analizy.');
     process.exit(1);
   }
 

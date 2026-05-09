@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "scan": "node scripts/scan.mjs",
     "pick": "node scripts/pick.mjs",
     "edit": "node scripts/edit.mjs"
   },
