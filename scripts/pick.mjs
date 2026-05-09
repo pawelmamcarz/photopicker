@@ -1,19 +1,18 @@
 #!/usr/bin/env node
 /**
- * Picker Photo CLI
- * Analizuje katalog zdjęć przez Claude Vision, kopiuje PICKS do podkatalogu
- * i aplikuje korektę w stylu wybranego fotografa (przez Sharp).
+ * Picker Photo CLI — Krok 1: Selekcja
+ *
+ * Analizuje katalog zdjęć przez Claude Vision i kopiuje PICKS
+ * do podkatalogu (bez edycji — oryginały). Krok 2 to: npm run edit
  *
  * Użycie:
- *   node scripts/pick.mjs <katalog> [opcje]
  *   npm run pick -- <katalog> [opcje]
  *
  * Opcje:
- *   --photographer, -p <id>   ID fotografa (pomija interaktywny wybór)
- *   --threshold, -t <liczba>  Minimalny wynik do skopiowania (domyślnie: 75)
- *   --out, -o <nazwa>         Nazwa folderu wyjściowego (domyślnie: edycja)
- *   --no-edit                 Kopiuj bez edycji obrazu
- *   --help                    Pomoc
+ *   -p, --photographer <id>   ID fotografa (pomija interaktywny wybór)
+ *   -t, --threshold <liczba>  Minimalny wynik (domyślnie: 75)
+ *   -o, --out <nazwa>         Nazwa folderu wyjściowego (domyślnie: edycja)
+ *   --help
  */
 
 import { readdir, mkdir, copyFile, readFile, writeFile } from 'fs/promises';
@@ -21,8 +20,6 @@ import { join, extname, basename } from 'path';
 import { createInterface } from 'readline';
 import sharp from 'sharp';
 import Anthropic from '@anthropic-ai/sdk';
-
-// ─── Definicje fotografów ──────────────────────────────────────────────────
 
 const PHOTOGRAPHERS = [
   { id: 'cartier-bresson', name: 'Henri Cartier-Bresson', tags: 'B&W · Street · Moment' },
@@ -84,37 +81,6 @@ Score from 0-100 based on:
 Return ONLY valid JSON: {"score": number, "reasoning": "2-3 sentences", "editSuggestion": "specific adjustments"}`,
 };
 
-// ─── Obróbka Sharp (odpowiednik CSS filterów z aplikacji web) ──────────────
-// Formuła kontrastu: output = input * c + 127.5 * (1 - c)
-
-const SHARP_EDITS = {
-  // grayscale(100%) contrast(1.2) brightness(0.9)
-  'cartier-bresson': (p) =>
-    p.grayscale().modulate({ brightness: 0.9 }).linear(1.2, -25.5),
-
-  // grayscale(100%) contrast(1.5) brightness(1.1)
-  'avedon': (p) =>
-    p.grayscale().modulate({ brightness: 1.1 }).linear(1.5, -63.75),
-
-  // saturate(1.3) contrast(1.1) brightness(1.05)
-  'meyerowitz': (p) =>
-    p.modulate({ brightness: 1.05, saturation: 1.3 }).linear(1.1, -12.75),
-
-  // grayscale(60%) contrast(1.3) sepia(0.2)  →  desaturate + contrast
-  'arbus': (p) =>
-    p.modulate({ brightness: 1.0, saturation: 0.4 }).linear(1.3, -38.25),
-
-  // contrast(1.4) brightness(0.95) saturate(0.8)
-  'newton': (p) =>
-    p.modulate({ brightness: 0.95, saturation: 0.8 }).linear(1.4, -51.0),
-
-  // saturate(1.5) contrast(1.2) brightness(0.95)
-  'mccurry': (p) =>
-    p.modulate({ brightness: 0.95, saturation: 1.5 }).linear(1.2, -25.5),
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
 const VALID_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 function ask(rl, question) {
@@ -133,15 +99,11 @@ function scoreCategory(score, threshold) {
 }
 
 async function analyzeImage(client, imagePath, photographerId) {
-  // Skaluj do max 1920px przed wysłaniem — pliki z aparatu są zbyt duże dla API
   const resized = await sharp(imagePath)
-    .rotate()                          // zachowaj orientację z EXIF
+    .rotate()
     .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 85 })
     .toBuffer();
-
-  const mediaType = 'image/jpeg';
-  const base64 = resized.toString('base64');
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -150,7 +112,7 @@ async function analyzeImage(client, imagePath, photographerId) {
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: resized.toString('base64') } },
         { type: 'text', text: 'Score this photo. Return ONLY valid JSON.' },
       ],
     }],
@@ -161,37 +123,26 @@ async function analyzeImage(client, imagePath, photographerId) {
   return JSON.parse(clean);
 }
 
-async function applyEdit(inputPath, outputPath, photographerId) {
-  const editFn = SHARP_EDITS[photographerId];
-  if (!editFn) {
-    await copyFile(inputPath, outputPath);
-    return;
-  }
-  const pipeline = sharp(inputPath);
-  await editFn(pipeline).toFile(outputPath);
-}
-
-// ─── Main ─────────────────────────────────────────────────────────────────
-
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(`
-Picker Photo CLI
+Picker Photo — Krok 1: Selekcja
 
 Użycie:
-  node scripts/pick.mjs <katalog> [opcje]
   npm run pick -- <katalog> [opcje]
 
 Opcje:
   -p, --photographer <id>   ID fotografa (pomija interaktywny wybór)
   -t, --threshold <liczba>  Minimalny wynik do skopiowania (domyślnie: 75)
   -o, --out <nazwa>         Nazwa folderu wyjściowego (domyślnie: edycja)
-  --no-edit                 Kopiuj pliki bez edycji
 
-Dostępni fotografowie:
+Fotografowie:
 ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
+
+Krok 2 (obróbka stylistyczna):
+  npm run edit -- <katalog/edycja>
 `);
     process.exit(0);
   }
@@ -200,7 +151,6 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
   let photographerId = null;
   let threshold = 75;
   let outDirName = 'edycja';
-  let noEdit = false;
 
   for (let i = 1; i < args.length; i++) {
     if ((args[i] === '--photographer' || args[i] === '-p') && args[i + 1]) {
@@ -209,8 +159,6 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
       threshold = parseInt(args[++i], 10);
     } else if ((args[i] === '--out' || args[i] === '-o') && args[i + 1]) {
       outDirName = args[++i];
-    } else if (args[i] === '--no-edit') {
-      noEdit = true;
     }
   }
 
@@ -220,7 +168,6 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
     process.exit(1);
   }
 
-  // Interaktywny wybór fotografa
   if (!photographerId) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     console.log('\nWybierz fotografa:\n');
@@ -240,7 +187,6 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
 
   const photographer = PHOTOGRAPHERS.find(p => p.id === photographerId);
 
-  // Listowanie zdjęć
   let files;
   try {
     files = await readdir(dirPath);
@@ -261,7 +207,7 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
 
   console.log(`
 ┌─────────────────────────────────────────────────────┐
-│  Picker Photo CLI                                   │
+│  Picker Photo — Krok 1: Selekcja                    │
 ├─────────────────────────────────────────────────────┤
 │  Fotograf : ${photographer.name.padEnd(40)}│
 │  Katalog  : ${dirPath.slice(-40).padEnd(40)}│
@@ -271,15 +217,13 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
 `);
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('Brak ANTHROPIC_API_KEY w zmiennych środowiskowych.');
-    console.error('Dodaj do .env.local lub wyeksportuj: export ANTHROPIC_API_KEY=sk-ant-...');
+    console.error('Brak ANTHROPIC_API_KEY. Ustaw: export ANTHROPIC_API_KEY=sk-ant-...');
     process.exit(1);
   }
 
   const client = new Anthropic();
   const results = [];
 
-  // Analiza
   for (let i = 0; i < images.length; i++) {
     const imagePath = images[i];
     const name = basename(imagePath);
@@ -290,15 +234,13 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
       const result = await analyzeImage(client, imagePath, photographerId);
       const score = Math.max(0, Math.min(100, Math.round(result.score)));
       results.push({ path: imagePath, name, score, reasoning: result.reasoning, editSuggestion: result.editSuggestion });
-      const cat = scoreCategory(score, threshold);
-      console.log(`${String(score).padStart(3)}  ${scoreBar(score)}  ${cat}`);
+      console.log(`${String(score).padStart(3)}  ${scoreBar(score)}  ${scoreCategory(score, threshold)}`);
     } catch (err) {
       console.log(`  —  błąd: ${err.message.slice(0, 40)}`);
       results.push({ path: imagePath, name, score: 0, reasoning: 'error', editSuggestion: '', error: true });
     }
   }
 
-  // Podsumowanie
   const picks   = results.filter(r => !r.error && r.score >= threshold);
   const maybes  = results.filter(r => !r.error && r.score >= 60 && r.score < threshold);
   const rejects = results.filter(r => !r.error && r.score < 60);
@@ -306,10 +248,10 @@ ${PHOTOGRAPHERS.map(p => `  ${p.id.padEnd(22)} ${p.name}`).join('\n')}
 
   console.log(`
 ───────────────────────────────────────────
-  PICKS        ${String(picks.length).padStart(3)} zdjęć  (score ≥ ${threshold})
+  PICKS         ${String(picks.length).padStart(3)} zdjęć  (score ≥ ${threshold})
   DO ROZWAŻENIA ${String(maybes.length).padStart(3)} zdjęć  (60–${threshold - 1})
-  ODRZUCONE    ${String(rejects.length).padStart(3)} zdjęć
-${errors.length > 0 ? `  BŁĘDY        ${String(errors.length).padStart(3)} zdjęć` : ''}───────────────────────────────────────────
+  ODRZUCONE     ${String(rejects.length).padStart(3)} zdjęć
+${errors.length > 0 ? `  BŁĘDY         ${String(errors.length).padStart(3)} zdjęć\n` : ''}───────────────────────────────────────────
 `);
 
   if (picks.length === 0) {
@@ -317,29 +259,22 @@ ${errors.length > 0 ? `  BŁĘDY        ${String(errors.length).padStart(3)} zdj
     process.exit(0);
   }
 
-  // Tworzenie folderu wyjściowego
   const outDir = join(dirPath, outDirName);
   await mkdir(outDir, { recursive: true });
 
-  // Kopiowanie / edycja
-  console.log(`Zapisywanie PICKS do: ${outDir}\n`);
+  console.log(`Kopiowanie PICKS (oryginały) do: ${outDir}\n`);
 
   for (const pick of picks.sort((a, b) => b.score - a.score)) {
     const outPath = join(outDir, pick.name);
     process.stdout.write(`  ${String(pick.score).padStart(3)}  ${pick.name.slice(0, 40).padEnd(40)} `);
     try {
-      if (noEdit) {
-        await copyFile(pick.path, outPath);
-      } else {
-        await applyEdit(pick.path, outPath, photographerId);
-      }
+      await copyFile(pick.path, outPath);
       console.log('✓');
     } catch (err) {
       console.log(`✗  ${err.message.slice(0, 40)}`);
     }
   }
 
-  // Raport JSON
   const report = {
     photographer: photographer.name,
     photographerId,
@@ -347,7 +282,6 @@ ${errors.length > 0 ? `  BŁĘDY        ${String(errors.length).padStart(3)} zdj
     outputDirectory: outDir,
     date: new Date().toISOString(),
     threshold,
-    editApplied: !noEdit,
     summary: { picks: picks.length, maybes: maybes.length, rejects: rejects.length },
     results: results.sort((a, b) => b.score - a.score),
   };
@@ -356,9 +290,12 @@ ${errors.length > 0 ? `  BŁĘDY        ${String(errors.length).padStart(3)} zdj
   await writeFile(reportPath, JSON.stringify(report, null, 2), 'utf-8');
 
   console.log(`
-✓ Gotowe!
-  ${picks.length} zdjęć zapisanych w: ${outDir}
+✓ Krok 1 gotowy!
+  ${picks.length} oryginałów w: ${outDir}
   Raport: ${reportPath}
+
+Krok 2 — obróbka stylistyczna:
+  npm run edit -- "${outDir}"
 `);
 }
 

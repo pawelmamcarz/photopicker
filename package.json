@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pick": "node scripts/pick.mjs"
+    "pick": "node scripts/pick.mjs",
+    "edit": "node scripts/edit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.50.0",
