@@ -235,7 +235,7 @@ Workflow z pre-filtrem:
       threshold = parseInt(args[++i], 10);
     } else if ((args[i] === '--out' || args[i] === '-o') && args[i + 1]) {
       outDirName = args[++i];
-    } else if (args[i] === '--scan' && args[i + 1]) {
+    } else if ((args[i] === '--scan' || args[i] === '--from') && args[i + 1]) {
       scanFile = args[++i];
     }
   }

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "scan": "node scripts/scan.mjs",
+    "preselect": "node scripts/preselect.mjs",
     "pick": "node scripts/pick.mjs",
     "edit": "node scripts/edit.mjs"
   },
