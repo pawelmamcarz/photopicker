@@ -133,13 +133,15 @@ function scoreCategory(score, threshold) {
 }
 
 async function analyzeImage(client, imagePath, photographerId) {
-  const ext = extname(imagePath).toLowerCase();
-  const mediaType =
-    ext === '.png'  ? 'image/png'  :
-    ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  // Skaluj do max 1920px przed wysłaniem — pliki z aparatu są zbyt duże dla API
+  const resized = await sharp(imagePath)
+    .rotate()                          // zachowaj orientację z EXIF
+    .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
 
-  const imageData = await readFile(imagePath);
-  const base64 = imageData.toString('base64');
+  const mediaType = 'image/jpeg';
+  const base64 = resized.toString('base64');
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
