@@ -39,7 +39,12 @@ export default function ResultsPage() {
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  // DLUG TECHNICZNY: flaga `mounted` opozniajaca przekierowanie o jeden render,
+  // zeby nie wystrzelilo zanim galeria odtworzy sie ze store'u. Dziala, ale to
+  // synchroniczny setState w efekcie. Wlasciwa naprawa to oparcie przekierowania
+  // o realny stan hydracji store'u zamiast o licznik renderow.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

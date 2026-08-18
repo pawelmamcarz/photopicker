@@ -32,7 +32,7 @@
  */
 
 import { readdir, readFile, writeFile } from 'fs/promises';
-import { join, extname, basename } from 'path';
+import { join, extname } from 'path';
 import { createInterface } from 'readline';
 import sharp from 'sharp';
 

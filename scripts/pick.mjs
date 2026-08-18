@@ -15,7 +15,7 @@
  *   --help
  */
 
-import { readdir, mkdir, copyFile, readFile, writeFile, stat } from 'fs/promises';
+import { readdir, mkdir, copyFile, readFile, writeFile } from 'fs/promises';
 import { join, extname, basename } from 'path';
 import { createInterface } from 'readline';
 import sharp from 'sharp';
